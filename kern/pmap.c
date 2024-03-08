@@ -99,7 +99,7 @@ boot_alloc(uint32_t n)
 		extern char end[];
 		nextfree = ROUNDUP((char *) end+1, PGSIZE);
 		// We had a merge conflict with end+1 in the nextfree calc - below is what they had
-		//nextfree = ROUNDUP((char *) end+1, PGSIZE);
+		//nextfree = ROUNDUP((char *) end, PGSIZE);
 	}
 
 	// Allocate a chunk large enough to hold 'n' bytes, then update
@@ -656,7 +656,10 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Hint: The staff solution uses boot_map_region.
 	//
 	// Your code here:
-	panic("mmio_map_region not implemented");
+	 
+	//case of rounding size i believe is covered by boot_map_region fxn
+	if(base + size < base) panic("overflow of MMIOLIM");
+	boot_map_region(kern_pgdir, MMIOBASE, size, pa, PTE_PCD|PTE_PWT);
 }
 
 static uintptr_t user_mem_check_addr;
