@@ -325,6 +325,7 @@ page_init(void)
 	// set starting idx as 1 because pp 0 is in use, so not to be freed
 	// rest of base memory between PGSIZE and npages_basemem * PGSIZE is free
 	for(size_t i = 1; i < npages_basemem;i++) {
+		if(i == PGNUM(MPENTRY_PADDR)) continue; //added to prevent freeing MPENTRY_PADDR
 		pages[i].pp_ref = 0;
 		pages[i].pp_link = page_free_list;
 		page_free_list = &pages[i];
@@ -334,7 +335,6 @@ page_init(void)
 
 	// Free everything after boot_alloc
 	for(int i = PGNUM(PADDR(boot_alloc(0))); i < npages; i++) {
-		if(i == PGNUM(MPENTRY_PADDR)) continue;
 		pages[i].pp_ref = 0;
 		pages[i].pp_link = page_free_list;
 		page_free_list = &pages[i];
