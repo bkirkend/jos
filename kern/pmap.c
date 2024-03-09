@@ -334,6 +334,7 @@ page_init(void)
 
 	// Free everything after boot_alloc
 	for(int i = PGNUM(PADDR(boot_alloc(0))); i < npages; i++) {
+		if(i == PGNUM(MPENTRY_PADDR)) continue;
 		pages[i].pp_ref = 0;
 		pages[i].pp_link = page_free_list;
 		page_free_list = &pages[i];
@@ -657,9 +658,10 @@ mmio_map_region(physaddr_t pa, size_t size)
 	//
 	// Your code here:
 	 
-	//case of rounding size i believe is covered by boot_map_region fxn
+	size = ROUNDUP(size, PGSIZE);
 	if(base + size < base) panic("overflow of MMIOLIM");
 	boot_map_region(kern_pgdir, MMIOBASE, size, pa, PTE_PCD|PTE_PWT);
+	return (void *) MMIOBASE; //video recomends looking up by page?
 }
 
 static uintptr_t user_mem_check_addr;
