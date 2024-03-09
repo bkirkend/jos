@@ -223,7 +223,15 @@ mem_init(void)
 	//       overwrite memory.  Known as a "guard page".
 	//     Permissions: kernel RW, user NONE
 	// Your code goes here:
-	boot_map_region(kern_pgdir, KSTACKTOP-KSTKSIZE, KSTKSIZE, PADDR(bootstack), PTE_W | PTE_P);
+
+	//old code from previous labs used below
+	//boot_map_region(kern_pgdir, KSTACKTOP-KSTKSIZE, KSTKSIZE, PADDR(bootstack), PTE_W | PTE_P);
+
+	//changed to the following for 2 calls, i think this is what we were always supposed to have
+	//now guard page should be correct
+	boot_map_region(kern_pgdir, KSTACKTOP - KSTKSIZE, KSTKSIZE, PADDR(bootstack), PTE_W | PTE_P);
+	boot_map_region(kern_pgdir, KSTACKTOP - PTSIZE, PTSIZE - KSTKSIZE, 0, PTE_W);
+	
 
 	//////////////////////////////////////////////////////////////////////
 	// Map all of physical memory at KERNBASE.
@@ -282,6 +290,11 @@ mem_init_mp(void)
 	//     Permissions: kernel RW, user NONE
 	//
 	// LAB 4: Your code here:
+	for(int i = 0; i < NCPU; i++){
+		uintptr_t kstacktop_i = KSTACKTOP - i * (KSTKSIZE + KSTKGAP);
+		boot_map_region(kern_pgdir, kstacktop_i - KSTKSIZE, kstacktop_i, PADDR(percpu_kstacks[i]), PTE_W | PTE_P);
+		boot_map_region(kern_pgdir, kstacktop_i - (KSTKSIZE + KSTKGAP), kstacktop_i - KSTKSIZE, 0, PTE_W);
+	}
 
 }
 
@@ -659,9 +672,15 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Your code here:
 	 
 	size = ROUNDUP(size, PGSIZE);
-	if(base + size < base) panic("overflow of MMIOLIM");
-	boot_map_region(kern_pgdir, MMIOBASE, size, pa, PTE_PCD|PTE_PWT);
-	return (void *) MMIOBASE; //video recomends looking up by page?
+	if(base + size >= MMIOLIM) panic("overflow of MMIOLIM");
+
+	for(size_t i = 0; i < size; i += PGSIZE){
+		boot_map_region(kern_pgdir, base + i, PGSIZE, pa + i, PTE_PCD|PTE_PWT|PTE_W);
+	}
+
+	base += size;
+
+	return (void *) (base - size);
 }
 
 static uintptr_t user_mem_check_addr;
