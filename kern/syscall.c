@@ -86,7 +86,18 @@ sys_exofork(void)
 	// will appear to return 0.
 
 	// LAB 4: Your code here.
-	panic("sys_exofork not implemented");
+	struct Env *new_env;
+	int env_ret = env_alloc(&new_env, curenv->env_id);
+	if(env_ret) { // return -E_NO_FREE_ENV if no free environment is available.
+		return -E_NO_FREE_ENV;
+	}
+
+	new_env->env_status = ENV_NOT_RUNNABLE; // status is set to ENV_NOT_RUNNABLE
+	new_env->env_tf = curenv->env_tf; // register set is copied from the current environment
+	new_env->env_tf.tf_regs.reg_eax = 0; // tweaked so sys_exofork will appear to return 0.
+
+	// Returns envid of new environment
+	return new_env->env_id;
 }
 
 // Set envid's env_status to status, which must be ENV_RUNNABLE
@@ -106,7 +117,18 @@ sys_env_set_status(envid_t envid, int status)
 	// envid's status.
 
 	// LAB 4: Your code here.
-	panic("sys_env_set_status not implemented");
+	// must be ENV_RUNNABLE or ENV_NOT_RUNNABLE.
+	if(status == ENV_NOT_RUNNABLE || status == ENV_RUNNABLE) {
+		struct Env *env;
+		int env_ret = envid2env(envid, &env, 1);
+		if(env_ret) { // return -E_BAD_ENV if environment envid doesn't currently exist, or the caller doesn't have permission to change envid.
+			return -E_BAD_ENV;
+		}
+		env->env_status = status;
+		return 0;
+	} else { // return -E_INVAL if status is not a valid status for an environment.
+		return -E_INVAL;
+	}
 }
 
 // Set the page fault upcall for 'envid' by modifying the corresponding struct
@@ -151,7 +173,40 @@ sys_page_alloc(envid_t envid, void *va, int perm)
 	//   allocated!
 
 	// LAB 4: Your code here.
-	panic("sys_page_alloc not implemented");
+	
+	// perm -- PTE_U | PTE_P must be set, PTE_AVAIL | PTE_W may or may not be set, but no other bits may be set.  See PTE_SYSCALL in inc/mmu.h.
+	if((perm & (PTE_U | PTE_P)) != (PTE_U |PTE_P) || (perm & (~PTE_SYSCALL))) {
+		return -E_INVAL;
+	}
+
+	// -E_INVAL if va >= UTOP, or va is not page-aligned.
+	if((uintptr_t)va >= UTOP || va != ROUNDUP(va, PGSIZE)) {
+		return -E_INVAL;
+	}
+
+	struct Env *env;
+	int env_ret = envid2env(envid, &env, 1);
+
+	//	-E_BAD_ENV if environment envid doesn't currently exist, or the caller doesn't have permission to change envid.
+	if(env_ret) {
+		return -E_BAD_ENV;
+	}
+
+	struct PageInfo *page = page_alloc(ALLOC_ZERO);
+
+	//	-E_NO_MEM if there's no memory to allocate the new page, or to allocate any necessary page tables.
+	if(!page) {
+		return -E_NO_MEM;
+	}
+
+	int final_ret = page_insert(env->env_pgdir, page, va, perm);
+
+	//   If page_insert() fails, remember to free the page you allocated!
+	if(final_ret) {
+		page_free(page);
+	}
+
+	return final_ret;
 }
 
 // Map the page of memory at 'srcva' in srcenvid's address space
@@ -172,7 +227,7 @@ sys_page_alloc(envid_t envid, void *va, int perm)
 //	-E_NO_MEM if there's no memory to allocate any necessary page tables.
 static int
 sys_page_map(envid_t srcenvid, void *srcva,
-	     envid_t dstenvid, void *dstva, int perm)
+             envid_t dstenvid, void *dstva, int perm)
 {
 	// Hint: This function is a wrapper around page_lookup() and
 	//   page_insert() from kern/pmap.c.
@@ -182,7 +237,29 @@ sys_page_map(envid_t srcenvid, void *srcva,
 	//   check the current permissions on the page.
 
 	// LAB 4: Your code here.
-	panic("sys_page_map not implemented");
+	struct Env *srcenv, *dstenv;
+	if (envid2env(srcenvid, &srcenv, 1) ||
+	    envid2env(dstenvid, &dstenv, 1)){
+		return -E_BAD_ENV;
+	}
+	if (srcva != ROUNDUP(srcva, PGSIZE) || (uintptr_t)srcva >= UTOP ||
+	    dstva != ROUNDUP(dstva, PGSIZE) || (uintptr_t)dstva >= UTOP)
+	{
+		return -E_INVAL;
+	}
+	pte_t* pte;
+	struct PageInfo *p = page_lookup(srcenv->env_pgdir, srcva, &pte);
+	if (!p)
+	{
+		return -E_INVAL;
+	}
+	if (((perm & (PTE_U|PTE_P)) != (PTE_U|PTE_P)) ||
+	    (perm & (~(PTE_SYSCALL))) ||
+	    ((perm & PTE_W) & (*pte)) != (perm & PTE_W))
+	{
+		return -E_INVAL;
+	}
+	return page_insert(dstenv->env_pgdir, p, dstva, perm);
 }
 
 // Unmap the page of memory at 'va' in the address space of 'envid'.
@@ -198,7 +275,16 @@ sys_page_unmap(envid_t envid, void *va)
 	// Hint: This function is a wrapper around page_remove().
 
 	// LAB 4: Your code here.
-	panic("sys_page_unmap not implemented");
+	struct Env * env;
+	if (envid2env(envid, &env, 1)){
+		return -E_BAD_ENV;
+	}
+	if (va != ROUNDUP(va, PGSIZE) || (uintptr_t)va >= UTOP)
+	{
+		return -E_INVAL;
+	}
+	page_remove(env->env_pgdir, va);
+	return 0;
 }
 
 // Try to send 'value' to the target env 'envid'.
@@ -288,6 +374,21 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 
 		case SYS_yield:
 			sys_yield();
+		
+		case SYS_exofork:
+			return sys_exofork();
+		
+		case SYS_env_set_status:
+			return sys_env_set_status(a1, a2);
+		
+		case SYS_page_alloc:
+			return sys_page_alloc(a1, (void*)a2, a3);
+		
+		case SYS_page_map:
+			return sys_page_map(a1, (void*)a2, a3, (void*)a4, a5);
+
+		case SYS_page_unmap:
+			return sys_page_unmap(a1, (void*)a2);
 		
 		default:
 			return -E_INVAL;
