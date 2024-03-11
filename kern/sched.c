@@ -29,6 +29,36 @@ sched_yield(void)
 	// below to halt the cpu.
 
 	// LAB 4: Your code here.
+	int env_i;
+	int currIdx;
+	if(curenv) {
+		env_i = ENVX(curenv->env_id);
+	} else {
+		env_i = 0;
+	}
+	
+	// Search through 'envs' for an ENV_RUNNABLE environment in
+	// circular fashion starting just after the env this CPU was
+	// last running.  Switch to the first such environment found.
+	for(int i = 0; i < NENV; i++) {
+		currIdx = (env_i + i) % NENV;
+		if(envs[currIdx].env_status == ENV_RUNNABLE) {
+			env_run(&envs[currIdx]);
+		}
+	}
+
+	// If no envs are runnable, but the environment previously
+	// running on this CPU is still ENV_RUNNING, it's okay to
+	// choose that environment.
+	if(curenv && curenv->env_status == ENV_RUNNING) {
+		env_run(curenv);
+	} else {
+		// Never choose an environment that's currently running on
+		// another CPU (env_status == ENV_RUNNING). If there are
+		// no runnable environments, simply drop through to the code
+		// below to halt the cpu.
+		sched_halt();
+	}
 
 	// sched_halt never returns
 	sched_halt();
