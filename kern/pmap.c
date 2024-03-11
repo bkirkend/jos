@@ -225,13 +225,7 @@ mem_init(void)
 	// Your code goes here:
 
 	//old code from previous labs used below
-	//boot_map_region(kern_pgdir, KSTACKTOP-KSTKSIZE, KSTKSIZE, PADDR(bootstack), PTE_W | PTE_P);
-
-	//changed to the following for 2 calls, i think this is what we were always supposed to have
-	//now guard page should be correct
-	boot_map_region(kern_pgdir, KSTACKTOP - KSTKSIZE, KSTKSIZE, PADDR(bootstack), PTE_W | PTE_P);
-	boot_map_region(kern_pgdir, KSTACKTOP - PTSIZE, PTSIZE - KSTKSIZE, 0, PTE_W);
-	
+	boot_map_region(kern_pgdir, KSTACKTOP-KSTKSIZE, KSTKSIZE, PADDR(bootstack), PTE_W | PTE_P);
 
 	//////////////////////////////////////////////////////////////////////
 	// Map all of physical memory at KERNBASE.
@@ -242,6 +236,8 @@ mem_init(void)
 	// Permissions: kernel RW, user NONE
 	// Your code goes here:
 	boot_map_region(kern_pgdir, KERNBASE, 0xFFFFFFFF - KERNBASE + 1, 0, PTE_W | PTE_P);
+
+	mem_init_mp();
 
 	// Check that the initial page directory has been set up correctly.
 	check_kern_pgdir();
@@ -292,8 +288,7 @@ mem_init_mp(void)
 	// LAB 4: Your code here:
 	for(int i = 0; i < NCPU; i++){
 		uintptr_t kstacktop_i = KSTACKTOP - i * (KSTKSIZE + KSTKGAP);
-		boot_map_region(kern_pgdir, kstacktop_i - KSTKSIZE, kstacktop_i, PADDR(percpu_kstacks[i]), PTE_W | PTE_P);
-		boot_map_region(kern_pgdir, kstacktop_i - (KSTKSIZE + KSTKGAP), kstacktop_i - KSTKSIZE, 0, PTE_W);
+		boot_map_region(kern_pgdir, kstacktop_i - KSTKSIZE, KSTKSIZE, PADDR(percpu_kstacks[i]), PTE_W);
 	}
 
 }

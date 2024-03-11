@@ -37,8 +37,8 @@ static struct Command commands[] = {
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
 	{ "backtrace", "Display the backtrace", mon_backtrace },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
-	{ "showmappings", "Display physical page mappings and corresponding permission bits that apply to the pages at virtual address and change the permissions", mon_showmappings },
-	{"setpermissions", "Modify the access permissions for the page containing the provided virtual address", mon_setperms },
+	//{ "showmappings", "Display physical page mappings and corresponding permission bits that apply to the pages at virtual address and change the permissions", mon_showmappings },
+	//{"setpermissions", "Modify the access permissions for the page containing the provided virtual address", mon_setperms },
 	{"memdump", "Dump contents of a range of memory given either a virtual or physical address range", mon_memdump},
 	{"si", "Single-step instructions at a breakpoint", mon_si},
 };
@@ -246,7 +246,7 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 	return 0;
 }
 
-int 
+/*int 
 mon_showmappings(int argc, char **argv, struct Trapframe *tf) {
 	cprintf("hello %s %s\n", argv[1], argv[2]);
 	show_pa_mappings(argv[1], argv[2]); 
@@ -281,7 +281,7 @@ mon_setperms(int argc, char **argv, struct Trapframe *tf){
 	}
 	change_perm(kern_pgdir, argv[1], flags);
 	return 0;
-}
+}*/
 
 int
 mon_memdump(int argc, char **argv, struct Trapframe *tf){
