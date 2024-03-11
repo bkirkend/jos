@@ -227,7 +227,7 @@ sys_page_alloc(envid_t envid, void *va, int perm)
 //	-E_NO_MEM if there's no memory to allocate any necessary page tables.
 static int
 sys_page_map(envid_t srcenvid, void *srcva,
-             envid_t dstenvid, void *dstva, int perm)
+	     envid_t dstenvid, void *dstva, int perm)
 {
 	// Hint: This function is a wrapper around page_lookup() and
 	//   page_insert() from kern/pmap.c.
@@ -237,29 +237,41 @@ sys_page_map(envid_t srcenvid, void *srcva,
 	//   check the current permissions on the page.
 
 	// LAB 4: Your code here.
-	struct Env *srcenv, *dstenv;
-	if (envid2env(srcenvid, &srcenv, 1) ||
-	    envid2env(dstenvid, &dstenv, 1)){
+	struct Env *src_env;
+	struct Env *dest_env;
+
+	// perm -- PTE_U | PTE_P must be set, PTE_AVAIL | PTE_W may or may not be set, but no other bits may be set.  See PTE_SYSCALL in inc/mmu.h.
+	if((perm & (PTE_U | PTE_P)) != (PTE_U |PTE_P) || (perm & (~PTE_SYSCALL))) {
+		return -E_INVAL;
+	}
+	
+	// -E_BAD_ENV if srcenvid and/or dstenvid doesn't currently exist, or the caller doesn't have permission to change one of them.
+	int src_env_ret = envid2env(srcenvid, &src_env, 1);
+	int dst_env_ret = envid2env(dstenvid, &dest_env, 1);
+	if(src_env_ret || dst_env_ret) {
 		return -E_BAD_ENV;
 	}
-	if (srcva != ROUNDUP(srcva, PGSIZE) || (uintptr_t)srcva >= UTOP ||
-	    dstva != ROUNDUP(dstva, PGSIZE) || (uintptr_t)dstva >= UTOP)
-	{
+
+	// -E_INVAL if srcva or dstva >= UTOP, or srcva or dstva is not page-aligned.
+	if((uintptr_t)srcva >= UTOP || srcva != ROUNDUP(srcva, PGSIZE) || (uintptr_t)dstva >= UTOP || dstva != ROUNDUP(dstva, PGSIZE)) {
 		return -E_INVAL;
 	}
-	pte_t* pte;
-	struct PageInfo *p = page_lookup(srcenv->env_pgdir, srcva, &pte);
-	if (!p)
-	{
+
+	pte_t* pageTableEntry;
+	struct PageInfo *page = page_lookup(src_env->env_pgdir, srcva, &pageTableEntry);
+
+	//	-E_INVAL is srcva is not mapped in srcenvid's address space.
+	if(!page) {
 		return -E_INVAL;
 	}
-	if (((perm & (PTE_U|PTE_P)) != (PTE_U|PTE_P)) ||
-	    (perm & (~(PTE_SYSCALL))) ||
-	    ((perm & PTE_W) & (*pte)) != (perm & PTE_W))
-	{
+
+	// -E_INVAL if (perm & PTE_W), but srcva is read-only in srcenvid's address space.
+	if(((perm & PTE_W) & (*pageTableEntry)) != (perm & PTE_W)) {
 		return -E_INVAL;
 	}
-	return page_insert(dstenv->env_pgdir, p, dstva, perm);
+
+	int final_ret = page_insert(dest_env->env_pgdir, page, dstva, perm);
+	return final_ret;
 }
 
 // Unmap the page of memory at 'va' in the address space of 'envid'.
@@ -275,14 +287,19 @@ sys_page_unmap(envid_t envid, void *va)
 	// Hint: This function is a wrapper around page_remove().
 
 	// LAB 4: Your code here.
-	struct Env * env;
-	if (envid2env(envid, &env, 1)){
+	struct Env *env;
+	int env_ret = envid2env(envid, &env, 1);
+
+	// -E_BAD_ENV if environment envid doesn't currently exist, or the caller doesn't have permission to change envid.
+	if(env_ret) {
 		return -E_BAD_ENV;
 	}
-	if (va != ROUNDUP(va, PGSIZE) || (uintptr_t)va >= UTOP)
-	{
+
+	//	-E_INVAL if va >= UTOP, or va is not page-aligned.
+	if((uintptr_t)va >= UTOP || va != ROUNDUP(va, PGSIZE)) {
 		return -E_INVAL;
 	}
+
 	page_remove(env->env_pgdir, va);
 	return 0;
 }
