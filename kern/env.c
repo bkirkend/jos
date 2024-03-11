@@ -613,6 +613,8 @@ env_run(struct Env *e)
 	// Update its 'env_runs' counter
 	e->env_runs += 1;
 
+	unlock_kernel();
+
 	// Use lcr3() to switch to its address space.
 	lcr3(PADDR(e->env_pgdir));
 
