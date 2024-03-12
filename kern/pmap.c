@@ -713,7 +713,7 @@ user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 		// A user program can access a virtual address if (1) the address is below
 		// ULIM, and (2) the page table gives it permission.  These are exactly
 		// the tests you should implement here.
-		if(!(PTE_P & *pageTableEntryOfMem) || (*pageTableEntryOfMem & perm) != perm || pageTableEntryOfMem == NULL || !((uintptr_t)i < ULIM)) {
+		if(pageTableEntryOfMem == NULL || !(PTE_P & *pageTableEntryOfMem) || (*pageTableEntryOfMem & perm) != perm || !((uintptr_t)i < ULIM)) {
 			// If there is an error, set the 'user_mem_check_addr' variable to the first
 			// erroneous virtual address.
 			if(i > va) { // this line seems so backwards to me but it works so idc
