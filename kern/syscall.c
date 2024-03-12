@@ -143,7 +143,20 @@ static int
 sys_env_set_pgfault_upcall(envid_t envid, void *func)
 {
 	// LAB 4: Your code here.
-	panic("sys_env_set_pgfault_upcall not implemented");
+	struct Env *env;
+	int env_ret = envid2env(envid, &env, 1);
+
+	if(env_ret) { // return -E_BAD_ENV if environment envid doesn't currently exist, or the caller doesn't have permission to change envid.
+		return -E_BAD_ENV;
+	}
+
+	// Set the page fault upcall for 'envid' by modifying the corresponding struct
+	// Env's 'env_pgfault_upcall' field.  When 'envid' causes a page fault, the
+	// kernel will push a fault record onto the exception stack, then branch to
+	// 'func'.
+	env->env_pgfault_upcall = func;
+	// Returns 0 on success
+	return 0;
 }
 
 // Allocate a page of memory and map it at 'va' with permission
@@ -406,6 +419,9 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 
 		case SYS_page_unmap:
 			return sys_page_unmap(a1, (void*)a2);
+
+		case SYS_env_set_pgfault_upcall:
+			return sys_env_set_pgfault_upcall(a1, (void*)a2);
 		
 		default:
 			return -E_INVAL;
