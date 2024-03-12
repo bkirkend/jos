@@ -25,6 +25,9 @@ pgfault(struct UTrapframe *utf)
 	//   (see <inc/memlayout.h>).
 
 	// LAB 4: Your code here.
+	if (!((err & FEC_WR) && (uvpd[PDX(addr)] & PTE_P) && (uvpt[PGNUM(addr)] & PTE_P) && (uvpt[PGNUM(addr)] & PTE_COW))) {
+		panic("In pgfault, not a copy-on-write page fault");
+	}
 
 	// Allocate a new page, map it at a temporary location (PFTEMP),
 	// copy the data from the old page to the new page, then move the new
@@ -34,7 +37,15 @@ pgfault(struct UTrapframe *utf)
 
 	// LAB 4: Your code here.
 
-	panic("pgfault not implemented");
+	addr = ROUNDDOWN(addr, PGSIZE);
+	// Allocate a new page, map it at a temporary location (PFTEMP)
+	sys_page_alloc(0, (void*)PFTEMP, PTE_P | PTE_U | PTE_W);
+	// copy the data from the old page to the new page
+	memmove((void*) PFTEMP, (void*)PTE_ADDR(addr), PGSIZE);
+	// move the new page to the old page's address
+	sys_page_map(0, PFTEMP, 0, addr, PTE_P|PTE_U|PTE_W);
+	sys_page_unmap(0, PFTEMP);
+	return;
 }
 
 //
@@ -54,9 +65,21 @@ duppage(envid_t envid, unsigned pn)
 	int r;
 
 	// LAB 4: Your code here.
-	panic("duppage not implemented");
+
+	// Map our virtual page pn (address pn*PGSIZE) into the target envid at the same virtual address
+	void *envid_addr = (void*) (pn*PGSIZE);
+
+	// If the page is writable or copy-on-write, the new mapping must be created copy-on-write, 
+	// and then our mapping must be marked copy-on-write as well
+	if((uvpt[pn] & PTE_COW) || (uvpt[pn] & PTE_W)) {
+		sys_page_map(0, envid_addr, envid, envid_addr, PTE_P|PTE_U|PTE_COW);
+		sys_page_map(0, envid_addr, 0, envid_addr, PTE_P|PTE_U|PTE_COW);
+	} else {
+		sys_page_map(0, envid_addr, envid, envid_addr, PTE_P|PTE_U);
+	}
 	return 0;
 }
+
 
 //
 // User-level fork with copy-on-write.
@@ -78,7 +101,50 @@ envid_t
 fork(void)
 {
 	// LAB 4: Your code here.
-	panic("fork not implemented");
+
+	// the parent installs pgfault() as the C-level page fault handler, using the set_pgfault_handler() function you implemented above.
+	set_pgfault_handler(pgfault);
+
+	// the parent calls sys_exofork() to create a child environment.
+	envid_t child_env = sys_exofork();
+
+	if(child_env < 0) {
+		panic("in fork, creation of child environment failed");
+	} else if(child_env == 0) {
+		// Remember to fix "thisenv" in the child process.
+		thisenv = &envs[ENVX(sys_getenvid())];
+		return 0;
+	} else {
+		// For each writable or copy-on-write page in its address space below UTOP,
+		for(uint32_t i = 0; i < USTACKTOP; i += PGSIZE) {
+			// the parent calls duppage, which should map the page copy-on-write into the 
+			// address space of the child and then remap the page copy-on-write in its own
+			// address space. duppage sets both PTEs so that the page is not writeable, and 
+			// to contain PTE_COW in the “avail” field to distinguish copy-on-write pages from genuine read-only pages.
+			// fork() also needs to handle pages that are present, but not writable or copy-on-write.
+			if ((uvpd[PDX(i)] & PTE_P) && (uvpt[PGNUM(i)] & PTE_P) && (uvpt[PGNUM(i)] & PTE_U)) {
+				duppage(child_env, PGNUM(i));
+			}
+		}
+
+		// The exception stack is not remapped this way, however. Instead you need to allocate 
+		// a fresh page in the child for the exception stack. Since the page fault handler will 
+		// be doing the actual copying and the page fault handler runs on the exception stack, 
+		// the exception stack cannot be made copy-on-write
+		int page_ret = sys_page_alloc(child_env, (void *)(UXSTACKTOP - PGSIZE), PTE_P|PTE_U|PTE_W);
+		if (page_ret < 0) {
+			panic("In fork, couldn't allocate exception stack");
+		}
+
+		// The parent sets the user page fault entrypoint for the child to look like its own.
+		extern void _pgfault_upcall();
+		sys_env_set_pgfault_upcall(child_env, _pgfault_upcall);
+
+		// The child is now ready to run, so the parent marks it runnable.
+		sys_env_set_status(child_env, ENV_RUNNABLE);
+
+		return child_env;
+	}
 }
 
 // Challenge!
