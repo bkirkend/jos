@@ -538,11 +538,13 @@ env_destroy(struct Env *e)
 		curenv = NULL;
 		sched_yield();
 	}
-	env_free(e);
+
+	// I have no idea why, but when this code is commented it fixes the spin bug
+	/*env_free(e);
 
 	cprintf("Destroyed the only environment - nothing more to do!\n");
 	while (1)
-		monitor(NULL);
+		monitor(NULL);*/
 }
 
 
