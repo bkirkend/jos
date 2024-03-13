@@ -95,11 +95,6 @@ TRAPHANDLER_NOEC(t_irq_ide, IRQ_OFFSET + IRQ_IDE);
 TRAPHANDLER_NOEC(t_irq_15, IRQ_OFFSET + 15);
 
 
-
-
-
-
-
 /*
  * Lab 3: Your code here for _alltraps
  */
