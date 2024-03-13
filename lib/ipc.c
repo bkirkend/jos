@@ -23,8 +23,40 @@ int32_t
 ipc_recv(envid_t *from_env_store, void *pg, int *perm_store)
 {
 	// LAB 4: Your code here.
-	panic("ipc_recv not implemented");
-	return 0;
+
+	// pass sys_ipc_recv a value that it will understand as meaning "no page".
+	//   If 'pg' is null, pass sys_ipc_recv a value that it will understand as meaning "no page".
+	// If the system call fails, then store 0 in *fromenv and *perm (if	they're nonnull) and return the error.
+	if(pg == NULL){
+		pg = (void*) -1;
+	}
+	int ipc_ret = sys_ipc_recv(pg);
+	if(ipc_ret) {
+		if(from_env_store != NULL) {
+			*from_env_store = 0;
+		}
+
+		if(perm_store != NULL) {
+			*perm_store = 0;
+		}
+
+		return ipc_ret;
+	}
+
+	// Use 'thisenv' to discover the value and who sent it.
+	// If 'from_env_store' is nonnull, then store the IPC sender's envid in
+	// *from_env_store.
+	if(from_env_store) {
+		*from_env_store = thisenv->env_ipc_from;
+	}
+		
+	// If 'perm_store' is nonnull, then store the IPC sender's page permission in *perm_store (this is nonzero iff a page was successfully transferred to 'pg').
+	if(perm_store) {
+		*perm_store = thisenv->env_ipc_perm;
+	}
+
+	// return the value sent by the sender
+	return thisenv->env_ipc_value;
 }
 
 // Send 'val' (and 'pg' with 'perm', if 'pg' is nonnull) to 'toenv'.
@@ -39,7 +71,28 @@ void
 ipc_send(envid_t to_env, uint32_t val, void *pg, int perm)
 {
 	// LAB 4: Your code here.
-	panic("ipc_send not implemented");
+
+	//   If 'pg' is null, pass sys_ipc_try_send a value that it will understand
+	//   as meaning "no page".  (Zero is not the right value.)
+	if(pg == NULL) {
+		pg = (void*)-1;
+	}
+
+	int ipc_ret;
+	
+	// Send 'val' (and 'pg' with 'perm', if 'pg' is nonnull) to 'toenv'.
+	while ((ipc_ret = sys_ipc_try_send(to_env, val, pg, perm))) {
+		// This function keeps trying until it succeeds.
+		if (ipc_ret == 0) break;
+
+		// It should panic() on any error other than -E_IPC_NOT_RECV.
+		if(ipc_ret != -E_IPC_NOT_RECV) {
+			panic("In ipc_send, error is not E_IPC_NOT_RECV");
+		}
+
+		// Use sys_yield() to be CPU-friendly.
+		sys_yield();
+	}	
 }
 
 // Find the first environment of the given type.  We'll use this to
