@@ -308,12 +308,9 @@ trap_dispatch(struct Trapframe *tf)
 			);
 			tf->tf_regs.reg_eax = ret;
 			return;
-		case IRQ_OFFSET + IRQ_TIMER:
+		case (IRQ_OFFSET + IRQ_TIMER):
 			lapic_eoi();
 			sched_yield();
-			return;
-		case IRQ_OFFSET + IRQ_SPURIOUS:
-			print_trapframe(tf);
 			return;
 	}
 
