@@ -28,9 +28,16 @@
    But a virtual address (namely e) has meaning relative to a given address context–the address context specifies the physical address to which the virtual address maps. 
    Why can the pointer e be dereferenced both before and after the addressing switch?
 
+   The virtual address for all processors/environments is the same above UTOP (except for UVPT) so it doesn't matter which page directory is being used. The virtual address mapping of 
+   e will be same when pointing to a physical address. 
+
    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 4. Whenever the kernel switches from one environment to another, it must ensure the old environment’s registers are saved so they can 
    be restored properly later. Why? Where does this happen?
+
+   The kernel needs the registers to be saved so that the environment that it is returned to is able to restore to the point it left off at 
+   in terms of both the instruction pointer and the stack pointer. This happens when there is a switch between user mode to kernel mode in the trapframe. 
+   More specifically, this happens by using env_pop_tf().
 
    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
