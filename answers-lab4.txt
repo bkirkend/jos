@@ -38,6 +38,8 @@
 
    The kernel needs the registers to be saved so that the environment that it is returned to is able to restore to the point it left off at 
    in terms of both the instruction pointer and the stack pointer. This happens when there is a switch between user mode to kernel mode in the trapframe. 
-   More specifically, this happens by using env_pop_tf().
+   More specifically, this happens by using env_pop_tf(). In addition, this occurs as a result of context-switching when round robin scheduling switches tasks
+   at a certain time quantum. This is essential to make sure that the processor is able to move back to the same state and stack conditions that it was last in to
+   pick up computation where it previously left off.
 
    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
