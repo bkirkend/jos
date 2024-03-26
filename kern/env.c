@@ -598,7 +598,8 @@ env_run(struct Env *e)
 	//	e->env_tf to sensible values.
 
 	// LAB 3: Your code here.
-
+	
+	if(e == NULL) panic("invalid environment");
 	// if this is a context switch (a new environment is running)
 	if(curenv != NULL && e != curenv) {
 		// Set the current environment back to ENV_RUNNABLE if it is ENV_RUNNING

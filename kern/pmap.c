@@ -665,7 +665,8 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Hint: The staff solution uses boot_map_region.
 	//
 	// Your code here:
-	 
+	if(size < 0) panic("invalid size"); 
+
 	size = ROUNDUP(size, PGSIZE);
 	if(base + size >= MMIOLIM) panic("overflow of MMIOLIM");
 
