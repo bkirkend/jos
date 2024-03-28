@@ -14,6 +14,7 @@
 static void
 pgfault(struct UTrapframe *utf)
 {
+	if (utf == NULL) panic("invalid utf");
 	void *addr = (void *) utf->utf_fault_va;
 	uint32_t err = utf->utf_err;
 	int r;
@@ -39,12 +40,18 @@ pgfault(struct UTrapframe *utf)
 
 	addr = ROUNDDOWN(addr, PGSIZE);
 	// Allocate a new page, map it at a temporary location (PFTEMP)
-	sys_page_alloc(0, (void*)PFTEMP, PTE_P | PTE_U | PTE_W);
+	if((r = sys_page_alloc(0, (void*)PFTEMP, PTE_P | PTE_U | PTE_W)) < 0){
+		panic("sys_page_alloc failed");
+	}
 	// copy the data from the old page to the new page
 	memmove((void*) PFTEMP, (void*)PTE_ADDR(addr), PGSIZE);
 	// move the new page to the old page's address
-	sys_page_map(0, PFTEMP, 0, addr, PTE_P|PTE_U|PTE_W);
-	sys_page_unmap(0, PFTEMP);
+	if((r = sys_page_map(0, (void*)PFTEMP, 0, addr, PTE_P|PTE_U|PTE_W)) < 0){
+		panic("sys_page_map failed");
+	}
+	if ((r = sys_page_unmap(0, (void*)PFTEMP)) < 0){
+		panic("sys_page_unmap failed");
+	}
 	return;
 }
 
@@ -58,27 +65,52 @@ pgfault(struct UTrapframe *utf)
 //
 // Returns: 0 on success, < 0 on error.
 // It is also OK to panic on error.
-//
+
 static int
 duppage(envid_t envid, unsigned pn)
 {
 	int r;
 
-	// LAB 4: Your code here.
+	//LAB 4: Your code here
+    // Check for valid virtual address
+    if (pn >= PGNUM(UTOP)) {
+        panic("Invalid page number");
+        return -1;
+    }
 
-	// Map our virtual page pn (address pn*PGSIZE) into the target envid at the same virtual address
-	void *envid_addr = (void*) (pn*PGSIZE);
+    // Calculate the virtual address
+    void *envid_addr = (void*)(pn * PGSIZE);
 
-	// If the page is writable or copy-on-write, the new mapping must be created copy-on-write, 
-	// and then our mapping must be marked copy-on-write as well
-	if((uvpt[pn] & PTE_COW) || (uvpt[pn] & PTE_W)) {
-		sys_page_map(0, envid_addr, envid, envid_addr, PTE_P|PTE_U|PTE_COW);
-		sys_page_map(0, envid_addr, 0, envid_addr, PTE_P|PTE_U|PTE_COW);
-	} else {
-		sys_page_map(0, envid_addr, envid, envid_addr, PTE_P|PTE_U);
-	}
-	return 0;
+    // Check if the current environment has permission to perform page mapping
+    if ((r = sys_page_map(0, envid_addr, envid, envid_addr, PTE_P | PTE_U)) < 0) {
+        panic("sys_page_map failed");
+        return r;
+    }
+
+    // If the page is writable or copy-on-write, handle accordingly
+    if ((uvpt[pn] & PTE_COW) || (uvpt[pn] & PTE_W)) {
+        // Map the page copy-on-write in the target environment
+        if ((r = sys_page_map(0, envid_addr, envid, envid_addr, PTE_P | PTE_U | PTE_COW)) < 0) {
+            panic("sys_page_map failed for COW target");
+            return r;
+        }
+
+        // Map the page copy-on-write in the current environment
+        if ((r = sys_page_map(0, envid_addr, 0, envid_addr, PTE_P | PTE_U | PTE_COW)) < 0) {
+            panic("sys_page_map failed for COW current");
+            return r;
+        }
+    } else {
+        // If the page is not writable or copy-on-write, simply map it
+        if ((r = sys_page_map(0, envid_addr, envid, envid_addr, PTE_P | PTE_U)) < 0) {
+            panic("sys_page_map failed for read-only mapping");
+            return r;
+        }
+    }
+
+    return 0;
 }
+
 
 
 //
