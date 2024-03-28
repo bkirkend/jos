@@ -29,7 +29,9 @@
    Why can the pointer e be dereferenced both before and after the addressing switch?
 
    The virtual address for all processors/environments is the same above UTOP (except for UVPT) so it doesn't matter which page directory is being used. The virtual address mapping of 
-   e will be same when pointing to a physical address. 
+   e will be same when pointing to a physical address. When moving between modes, the value of the physical address in memory that the variable e points to is unchanged. Thus,
+   the MMU retains a correct mapping of the necessary address translations before and after switching address contexts.
+
 
    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -38,7 +40,7 @@
 
    The kernel needs the registers to be saved so that the environment that it is returned to is able to restore to the point it left off at 
    in terms of both the instruction pointer and the stack pointer. This happens when there is a switch between user mode to kernel mode in the trapframe. 
-   More specifically, this happens by using env_pop_tf(). In addition, this occurs as a result of context-switching when round robin scheduling switches tasks
+   More specifically, this happens by using env_pop_tf(). One example of this occurring is as a result of context-switching when round robin scheduling switches tasks
    at a certain time quantum. This is essential to make sure that the processor is able to move back to the same state and stack conditions that it was last in to
    pick up computation where it previously left off.
 
