@@ -37,10 +37,37 @@ syscall(int num, int check, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 	return ret;
 }
 
+int32_t fast_syscall(int num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4) {
+    int32_t ret;
+    asm volatile(
+        "pushl %%ebp\n\t"
+        "movl %%esp, %%ebp\n\t"
+        "leal after_sysenter_label, %%esi\n\t"
+        "sysenter\n\t"
+        "after_sysenter_label:\n\t"
+        "popl %%ebp\n\t"
+        : "=a" (ret)
+        : "a" (num),
+          "d" (a1),
+          "c" (a2),
+          "b" (a3),
+          "D" (a4),
+          "i" (T_SYSCALL)
+        : "cc", "memory");
+
+	if(ret < 0)panic("Error: fast_syscall return");
+    return ret;
+}
+
+
+
+
+
 void
 sys_cputs(const char *s, size_t len)
 {
 	syscall(SYS_cputs, 0, (uint32_t)s, len, 0, 0, 0);
+	//fast_syscall(SYS_cputs, (uint32_t)s, len, 0, 0);
 }
 
 int

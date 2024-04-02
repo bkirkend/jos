@@ -3,6 +3,13 @@
 #include <inc/stdio.h>
 #include <inc/string.h>
 #include <inc/assert.h>
+extern void sysenter_handler(void);
+extern void randfxn(void);
+
+#include <inc/stdio.h>
+#include <inc/string.h>
+#include <inc/assert.h>
+#include <inc/x86.h>
 
 #include <kern/monitor.h>
 #include <kern/console.h>
@@ -18,9 +25,20 @@
 static void boot_aps(void);
 
 
+#define MSR_IA32_SYSENTER_CS 0x174
+#define MSR_IA32_SYSENTER_ESP 0x175
+#define MSR_IA32_SYSENTER_EIP 0x176
+
 void
 i386_init(void)
 {
+	extern char edata[], end[];
+
+	// Before doing anything else, complete the ELF loading process.
+	// Clear the uninitialized global data (BSS) section of our program.
+	// This ensures that all static/global variables start out zero.
+	memset(edata, 0, end - edata);
+
 	// Initialize the console.
 	// Can't call cprintf until after we do this!
 	cons_init();
@@ -43,12 +61,17 @@ i386_init(void)
 
 	// Acquire the big kernel lock before waking up APs
 	// Your code here:
+	lock_kernel();
 
 	// Starting non-boot CPUs
 	boot_aps();
 
 	// Start fs.
 	ENV_CREATE(fs_fs, ENV_TYPE_FS);
+	wrmsr(MSR_IA32_SYSENTER_CS, GD_KT, 0);
+	wrmsr(MSR_IA32_SYSENTER_ESP, KSTACKTOP,0);
+	wrmsr(MSR_IA32_SYSENTER_EIP, (uint32_t)sysenter_handler,0);
+	trap_init();
 
 #if defined(TEST)
 	// Don't touch -- used by grading script!
@@ -56,10 +79,14 @@ i386_init(void)
 #else
 	// Touch all you want.
 	ENV_CREATE(user_icode, ENV_TYPE_USER);
-#endif // TEST*
 
 	// Should not be necessary - drains keyboard because interrupt has given up.
 	kbd_intr();
+
+	ENV_CREATE(user_faultallocbad, ENV_TYPE_USER);
+	//ENV_CREATE(user_yield, ENV_TYPE_USER);
+	//ENV_CREATE(user_yield, ENV_TYPE_USER);
+#endif // TEST*
 
 	// Schedule and run the first user environment!
 	sched_yield();
@@ -115,6 +142,8 @@ mp_main(void)
 	// only one CPU can enter the scheduler at a time!
 	//
 	// Your code here:
+	lock_kernel();
+	sched_yield();
 
 	// Remove this after you finish Exercise 6
 	for (;;);

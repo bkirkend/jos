@@ -49,7 +49,10 @@ int	sys_env_destroy(envid_t);
 void	sys_yield(void);
 static envid_t sys_exofork(void);
 int	sys_env_set_status(envid_t env, int status);
+<<<<<<< HEAD
 int	sys_env_set_trapframe(envid_t env, struct Trapframe *tf);
+=======
+>>>>>>> lab4/main
 int	sys_env_set_pgfault_upcall(envid_t env, void *upcall);
 int	sys_page_alloc(envid_t env, void *pg, int perm);
 int	sys_page_map(envid_t src_env, void *src_pg,
@@ -116,6 +119,7 @@ int	pipeisclosed(int pipefd);
 
 // wait.c
 void	wait(envid_t env);
+
 
 /* File open modes */
 #define	O_RDONLY	0x0000		/* open for reading only */
